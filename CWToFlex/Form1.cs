@@ -11,7 +11,7 @@ using System.Data.SqlClient;
 using System.Threading;
 using System.Globalization;
 using System.IO;
-// Vi gör en justering
+
 namespace CWToFlex
 {
     public partial class Form1 : Form
@@ -291,7 +291,7 @@ namespace CWToFlex
         {
             //Killemeterersättning dela upp per konto
             //Representation konto 6071 och 7631
-            string select = @"SELECT m.EmployeeNo           
+            string select = @"SELECT m.EmployeeNo  
                             ,ed.Reason, ed.Date_Expense           
                             ,case WHEN et.EX_Type_RecID = 35 and et.Description like 'Kilometerersättning'  THEN Amount            
                             when ed.Bill_Amount = 0 and et.Description like 'Kilometerersättning' then ed.Invoice_Amount           
@@ -352,7 +352,78 @@ namespace CWToFlex
                             EX_Type AS et ON et.EX_Type_RecID = ed.EX_Type_RecID           
                             WHERE(ed.Date_Expense BETWEEN '" + From.ToShortDateString() + "' and '" + Tom.ToShortDateString() + @"')
                             and ec.EX_Class_RecID = 2
-                            order by cast(m.EmployeeNo as int)";
+                           
+                            union all
+
+                            --Frukost
+                            select 
+                            m.EmployeeNo           
+                            ,ed.Reason, ed.Date_Expense           
+                            ,0 Quantity           
+                            , ed.Invoice_Amount Amount           
+                            ,et.Description + ' ' + isnull(eudff.Caption,'') ETDescription           
+                            , CASE WHEN Company_Name LIKE 'Acon AB' OR ed.Billable_Flag = 0 THEN 'Acon'           
+                            WHEN Company_Name NOT LIKE 'Acon AB' AND ed.Billable_Flag = 1 THEN 'Utlägg'           
+                            END AS Accounting           
+                            ,'790' Loneartsnr           
+                            ,'7321'  AS Account 
+
+                            FROM EX_Header AS e INNER JOIN           
+                            EX_Detail AS ed ON ed.EX_Header_RecID = e.EX_Header_RecID INNER JOIN           
+                            EX_Class AS ec ON ec.EX_Class_RecID = ed.EX_Class_RecID INNER JOIN           
+                            EX_Payment AS ep ON ep.EX_Payment_RecID = ed.EX_Payment_RecID INNER JOIN           
+                            (Select m.*, me.Value as EmployeeNo from Member m           
+                            left join Member_Extended_Property_Value me on me.Member_RecID = m.Member_RecID and me.Member_Extended_Property_RecID = 98) m ON m.Member_RecID = e.Member_RecID 
+                            INNER JOIN           
+                            Company AS c ON c.Company_RecID = ed.Company_RecID INNER JOIN           
+                            EX_Type AS et ON et.EX_Type_RecID = ed.EX_Type_RecID  
+                            inner join (Select EX_Detail_RecID, EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption from EX_User_Defined_Field_Value eudf
+                            join User_Defined_Field Udf on UDF.User_Defined_Field_RecID =eudf.User_Defined_Field_RecID 
+                            where eudf.User_Defined_Field_RecID in (13) and eudf.User_Defined_Field_Value like 'true' 
+                            group by EX_Detail_RecID,EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption) eudff on eudff.EX_Detail_RecID = ed.EX_Detail_RecID  
+
+                            WHERE(ed.Date_Expense BETWEEN '" + From.ToShortDateString() + "' and '" + Tom.ToShortDateString() + @"') --and eudf.EX_User_Defined_Field_Value_RecID in (13,14,15)
+                            and ec.EX_Class_RecID = 2
+
+                            union all
+
+                            --Lunch, middag
+                            select 
+                            m.EmployeeNo       
+                            ,ed.Reason, ed.Date_Expense           
+                            ,0  Quantity           
+                            ,ed.Invoice_Amount Amount           
+                            ,et.Description + ' ' + isnull(eudfl.Caption,'') + ' ' + isnull(eudfm.Caption,'') ETDescription           
+                            , CASE WHEN Company_Name LIKE 'Acon AB' OR ed.Billable_Flag = 0 THEN 'Acon'           
+                            WHEN Company_Name NOT LIKE 'Acon AB' AND ed.Billable_Flag = 1 THEN 'Utlägg'           
+                            END AS Accounting           
+                            ,case when eudfl.User_Defined_Field_RecID = 14 and eudfm.User_Defined_Field_RecID is null then '791'
+                            when eudfl.User_Defined_Field_RecID is null and eudfm.User_Defined_Field_RecID =15 then '791'
+                            when eudfl.User_Defined_Field_RecID = 14 and eudfm.User_Defined_Field_RecID = 15 then '792'
+                            end Loneartsnr           
+                            ,'7321'  AS Account 
+                            FROM EX_Header AS e INNER JOIN           
+                            EX_Detail AS ed ON ed.EX_Header_RecID = e.EX_Header_RecID INNER JOIN           
+                            EX_Class AS ec ON ec.EX_Class_RecID = ed.EX_Class_RecID INNER JOIN           
+                            EX_Payment AS ep ON ep.EX_Payment_RecID = ed.EX_Payment_RecID INNER JOIN           
+                            (Select m.*, me.Value as EmployeeNo from Member m           
+                            left join Member_Extended_Property_Value me on me.Member_RecID = m.Member_RecID and me.Member_Extended_Property_RecID = 98) m ON m.Member_RecID = e.Member_RecID 
+                            left JOIN           
+                            Company AS c ON c.Company_RecID = ed.Company_RecID INNER JOIN           
+                            EX_Type AS et ON et.EX_Type_RecID = ed.EX_Type_RecID  
+                            left join (Select EX_Detail_RecID, EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption from EX_User_Defined_Field_Value eudf
+                            join User_Defined_Field Udf on UDF.User_Defined_Field_RecID =eudf.User_Defined_Field_RecID
+                            where eudf.User_Defined_Field_RecID in (14) and eudf.User_Defined_Field_Value like 'true' 
+                            group by EX_Detail_RecID,EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption) eudfl on eudfl.EX_Detail_RecID = ed.EX_Detail_RecID  
+
+                            left join (Select EX_Detail_RecID, EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption from EX_User_Defined_Field_Value eudf
+                            join User_Defined_Field Udf on UDF.User_Defined_Field_RecID =eudf.User_Defined_Field_RecID 
+                            where eudf.User_Defined_Field_RecID in (15) and eudf.User_Defined_Field_Value like 'true' 
+                            group by EX_Detail_RecID,EUDF.User_Defined_Field_RecID,User_Defined_Field_Value,Caption) eudfm on eudfm.EX_Detail_RecID = ed.EX_Detail_RecID  
+                            WHERE(ed.Date_Expense BETWEEN '" + From.ToShortDateString() + "' and '" + Tom.ToShortDateString() + @"') and (eudfl.EX_Detail_RecID is not null or eudfm.EX_Detail_RecID is not null) --and eudf.EX_User_Defined_Field_Value_RecID in (13,14,15)
+                            and ec.EX_Class_RecID = 2
+
+                            order by m.EmployeeNo";
             return select;
         }
         private string getSelectStringDeviationOvertime(DateTime From, DateTime Tom)
