@@ -11,7 +11,7 @@ using System.Data.SqlClient;
 using System.Threading;
 using System.Globalization;
 using System.IO;
-// Vi gör en justering
+
 namespace CWToFlex
 {
     public partial class Form1 : Form
